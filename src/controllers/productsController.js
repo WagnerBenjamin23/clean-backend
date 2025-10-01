@@ -1,40 +1,80 @@
 const { messaging } = require('firebase-admin');
 const pool = require('../config/db');
 categoriesController = require('./categoriesController');
+const admin = require("firebase-admin");
+const storage = admin.storage().bucket();
+const cloudinary = require('../config/cloudinary');
 
 createProduct = async (req, res) => {
-    const { name, description, price, stock, id_category, image_url } = req.body.product;
+  const { name, description, price, stock, id_category} = req.body.product;
+  const images = req.body.product.images; 
+  try {
+    // Validar categoría
+    const [category] = await pool.query(
+      "SELECT * FROM categories WHERE idcategory = ?",
+      [id_category]
+    );
 
-    try{
-        category = await pool.query(
-          "SELECT * FROM categories WHERE idcategory = ?",
-          [id_category])
-
-        if (category[0].length === 0) {
-          return res.status(404).json({ message: "Categoría no encontrada" });
-        }
-
-        const result = await pool.query(
-        "INSERT INTO products (name, description, price, stock, categories_idcategory) VALUES (?, ?, ?, ?, ?)",
-        [name, description, price, stock, id_category]
-        );
-
-        if(image_url){
-        await pool.query(
-            "INSERT INTO product_images (image_url, products_idproducts) VALUES (?, ?)",
-            [image_url, result[0].insertId]
-        );}
-
-        return res.status(201).json({ message: "Producto creado", product: result });
+    if (category.length === 0) {
+      return res.status(404).json({ message: "Categoría no encontrada" });
     }
-    catch(error){
-      return res.status(500).json({ message: "Error al crear producto", error });
+
+    // Crear producto
+    const [result] = await pool.query(
+      "INSERT INTO products (name, description, price, stock, categories_idcategory) VALUES (?, ?, ?, ?, ?)",
+      [name, description, price, stock, id_category]
+    );
+    const productId = result.insertId;
+
+    await uploadProductImages(images, productId);
+
+
+    return res.status(201).json({ message: "Producto creado", productId });
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Error al crear producto", error });
+  }
+};
+
+addProductImage = async (req, res) => {
+
+
+  console.log('PARAMS: ', req.params)
+  const productId = req.params.id;
+  const {images} = req.body;
+
+  console.log("ID ", productId);
+  console.log("IMAGES ", images )
+  
+
+  try{
+    const product = await getProductByIdInternal(productId);
+    console.log("PRODUCTO", product)
+    if(!product) res.status(404).json({message:"Producto no encontrado"});
+    {
+      await pool.query(
+        "INSERT INTO product_images (image_url, products_idproducts) VALUES (?, ?)",
+        [images, productId]
+      );
+      res.status(201).json({message: 'Imagen guardada'})
     }
+  }
+  catch (e){
+    res.status(404).json({message:"Error al guardar imagen", error: e});
+  }
 }
 
 getProducts = async (req, res) => {
     try{
-        const [rows] = await pool.query("SELECT * FROM products");
+        const [rows] = await pool.query(`
+        SELECT p.*, 
+              GROUP_CONCAT(i.image_url) AS images
+        FROM products p
+        LEFT JOIN product_images i ON p.idproducts = i.products_idproducts
+        GROUP BY p.idproducts
+        `);
+
         if (rows.length === 0) {
           return res.status(404).json({ message: "No hay productos disponibles" });
         }
@@ -93,4 +133,129 @@ updateProduct = async (req, res) => {
   }
 };
 
-module.exports = {createProduct, getProducts, changeVisibility, updateProduct}
+deleteProduct = async (req, res) => {
+  const connection = await pool.getConnection();
+  try {
+    const productId = req.params.id;
+
+    // Iniciar transacción
+    await connection.beginTransaction();
+
+    // 1. Traer imágenes asociadas ANTES de borrar
+    const [images] = await connection.query(
+      "SELECT image_url FROM product_images WHERE products_idproducts = ?",
+      [productId]
+    );
+
+    for (const img of images) {
+    await deleteImageFromCloudinary(img.image_url);
+   }
+
+    // 2. Borrar imágenes en la DB
+    await connection.query(
+      "DELETE FROM product_images WHERE products_idproducts = ?",
+      [productId]
+    );
+
+    // 3. Borrar el producto
+    const [result] = await connection.query(
+      "DELETE FROM products WHERE idproducts = ?",
+      [productId]
+    );
+
+    if (result.affectedRows === 0) {
+      await connection.rollback();
+      return res.status(404).json({ message: "Producto no encontrado" });
+    }
+
+    // Confirmar si todo salió bien
+    await connection.commit();
+    return res.status(200).json({ message: "Producto e imágenes borrados exitosamente" });
+
+  } catch (err) {
+    await connection.rollback();
+    return res.status(500).json({
+      message: "Error al borrar producto",
+      error: err.message,
+    });
+  } finally {
+    connection.release();
+  }
+};
+
+
+
+const getProductByIdInternal = async (id) => {
+  const [productRows] = await pool.query(
+    "SELECT * FROM products WHERE idproducts = ?",
+    [id]
+  );
+
+  if (productRows.length === 0) {
+    throw new Error("Producto no encontrado");
+  }
+
+  const [imageRows] = await pool.query(
+    "SELECT image_url FROM product_images WHERE products_idproducts = ?",
+    [id]
+  );
+
+  const product = {
+    ...productRows[0],
+    images: imageRows.map(img => img.image_url)
+  };
+
+  return { product };
+};
+
+function getFilePathFromUrl(url) {
+  try {
+    const decoded = decodeURIComponent(url); 
+    const match = decoded.match(/\/o\/(.*?)\?/); 
+    return match ? match[1] : null;  
+  } catch (e) {
+    return null;
+  }
+}
+
+
+async function uploadProductImages(images, productId) {
+  try {
+    for (const url of images) {
+      await pool.query(
+        "INSERT INTO product_images (products_idproducts, image_url) VALUES (?, ?)",
+        [productId, url]
+      );
+    }
+    console.log("Imágenes subidas correctamente");
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function deleteImageFromCloudinary(url) {
+  const publicId = getPublicIdFromUrl(url);
+  console.log('PUBLIC ID', publicId)
+  try {
+    const result = await cloudinary.uploader.destroy(publicId);
+    console.log('Resultado eliminación Cloudinary:', result);
+    return result;
+  } catch (err) {
+    console.error('Error eliminando imagen de Cloudinary:', err);
+    throw err;
+  }
+}
+
+function getPublicIdFromUrl(url) {
+  const parts = url.split('/');
+  console.log('parts', parts)
+  const filename = parts[parts.length - 1]; 
+  console.log('filename', filename)
+  return filename.substring(0, filename.lastIndexOf('.')); // tmi0rzu4azyrn9nedj7r
+}
+
+
+
+
+
+module.exports = {createProduct, getProducts, changeVisibility, updateProduct, deleteProduct, addProductImage, uploadProductImages}

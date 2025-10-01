@@ -5,7 +5,8 @@ const serviceAccount = require("../../firebase-service-account.json");
 
 admin.initializeApp({
 
-  credential: admin.credential.cert(serviceAccount)
+  credential: admin.credential.cert(serviceAccount),
+  storageBucket:"gs://seedsoflove-380d2.appspot.com"
 
 });
 
