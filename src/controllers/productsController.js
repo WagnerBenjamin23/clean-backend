@@ -109,6 +109,8 @@ updateProduct = async (req, res) => {
     const { name, description, price, stock, id_category } = req.body;
     const productId = req.params.id; 
 
+    console.log('Updating product:', { productId, name, description, price, stock, id_category });
+
     const [result] = await pool.execute(
       `UPDATE products 
        SET name = ?, description = ?, price = ?, stock = ?, categories_idcategory = ? 
@@ -251,11 +253,49 @@ function getPublicIdFromUrl(url) {
   console.log('parts', parts)
   const filename = parts[parts.length - 1]; 
   console.log('filename', filename)
-  return filename.substring(0, filename.lastIndexOf('.')); // tmi0rzu4azyrn9nedj7r
+  return filename.substring(0, filename.lastIndexOf('.')); 
 }
 
+getLatestProducts = async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 5;
+
+    const [products] = await pool.query(
+      `
+      SELECT 
+        p.*,
+        (
+          SELECT pi.image_url
+          FROM product_images pi
+          WHERE pi.products_idproducts = p.idproducts
+          ORDER BY pi.created_at ASC
+          LIMIT 1
+        ) AS image
+      FROM products p
+      ORDER BY p.created_at DESC
+      LIMIT ?
+      `,
+      [limit]
+    );
+
+    return res.status(200).json({
+      ok: true,
+      data: products
+    });
+  } catch (error) {
+    console.error('Error getting latest products:', error);
+    return res.status(500).json({
+      ok: false,
+      message: 'Error getting latest products'
+    });
+  }
+};
 
 
 
 
-module.exports = {createProduct, getProducts, changeVisibility, updateProduct, deleteProduct, addProductImage, uploadProductImages}
+
+
+
+
+module.exports = {createProduct, getProducts, changeVisibility, updateProduct, deleteProduct, addProductImage, uploadProductImages, getLatestProducts}

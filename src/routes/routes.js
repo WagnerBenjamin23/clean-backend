@@ -35,7 +35,7 @@ router.patch('/products/:id/visibility', productsController.changeVisibility);
 router.put('/products/:id', productsController.updateProduct);
 router.delete('/products/:id', productsController.deleteProduct);
 router.post('/products/:id/images', productsController.uploadProductImages);
-
+router.get('/products/latest', productsController.getLatestProducts);
 
 router.post('/combos',  combosController.createCombo);
 router.get('/combos',  combosController.getCombos);
