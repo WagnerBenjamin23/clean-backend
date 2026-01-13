@@ -78,4 +78,32 @@ getCategoriesById = async (req, res) => {
     }
 }
 
-module.exports = {saveCategory, deleteCategory, getAllCategories, getCategoriesById };
+updateCategory = async (req, res) => {
+  const { id } = req.params;
+  const { name, description } = req.body;
+
+  try {
+    const [result] = await pool.query(
+      'UPDATE categories SET name = ?, description = ? WHERE idcategory = ?',
+      [name, description, id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: 'Categoria no encontrada' });
+    }
+
+    res.json({
+      idcategory: Number(id),
+      name,
+      description
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Error editando categoria' });
+  }
+};
+
+
+
+module.exports = {saveCategory, deleteCategory, getAllCategories, getCategoriesById, updateCategory };

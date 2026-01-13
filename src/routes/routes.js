@@ -27,7 +27,7 @@ router.get('/dashboard/metrics',  dashboardController.getDashboardStats);
 router.post('/categories', categoriesController.saveCategory);
 router.get('/categories', categoriesController.getAllCategories)
 router.delete('/categories/:id', categoriesController.deleteCategory);
-
+router.put('/categories/:id', categoriesController.updateCategory);
 
 router.post('/products', upload.array('images'), productsController.createProduct);
 router.get('/products', productsController.getProducts);
