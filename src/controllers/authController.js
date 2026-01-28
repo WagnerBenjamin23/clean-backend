@@ -33,6 +33,10 @@ registerUser = async (req, res) => {
 loginUser = async (req, res) => {
   const { email, password } = req.body; 
 
+  console.log('BODY LOGIN:', req.body);
+  console.log('HEADERS:', req.headers);
+
+
   if (!email || !password) {
     return res.status(400).json({ message: "Email y password son requeridos" });
   }
