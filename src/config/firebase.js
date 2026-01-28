@@ -12,7 +12,7 @@ const serviceAccount = JSON.parse(
 admin.initializeApp({
 
   credential: admin.credential.cert(serviceAccount),
-  storageBucket:"gs://seedsoflove-380d2.appspot.com"
+  storageBucket: "clean-b63d0.firebasestorage.app",
 
 });
 
