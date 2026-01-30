@@ -21,16 +21,22 @@ class Server{
   this.app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
+
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(null, true); // no romper en prod
+      callback(null, true);
     }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'x-api-key'
+  ],
   credentials: true
 }));
+
 
 
   this.app.use(express.json());
