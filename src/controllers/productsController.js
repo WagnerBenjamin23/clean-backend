@@ -8,9 +8,13 @@ const cloudinary = require('../config/cloudinary');
 createProduct = async (req, res) => {
   const { name, description, price, stock, id_category} = req.body.product;
   const images = req.body.product.images; 
+
+  let conn;
   try {
+    conn = await pool.getConnection();
+
     // Validar categoría
-    const [category] = await pool.query(
+    const [category] = await conn.query(
       "SELECT * FROM categories WHERE idcategory = ?",
       [id_category]
     );
@@ -20,22 +24,30 @@ createProduct = async (req, res) => {
     }
 
     // Crear producto
-    const [result] = await pool.query(
+    const [result] = await conn.query(
       "INSERT INTO products (name, description, price, stock, categories_idcategory) VALUES (?, ?, ?, ?, ?)",
       [name, description, price, stock, id_category]
     );
     const productId = result.insertId;
 
-    await uploadProductImages(images, productId);
-
+    // Subir imágenes
+    for (const url of images) {
+      await conn.query(
+        "INSERT INTO product_images (products_idproducts, image_url) VALUES (?, ?)",
+        [productId, url]
+      );
+    }
 
     return res.status(201).json({ message: "Producto creado", productId });
 
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Error al crear producto", error });
+  } finally {
+    if (conn) conn.release();
   }
 };
+
 
 addProductImage = async (req, res) => {
 

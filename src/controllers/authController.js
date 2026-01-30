@@ -33,53 +33,48 @@ registerUser = async (req, res) => {
 loginUser = async (req, res) => {
   const { email, password } = req.body; 
 
-  console.log('BODY LOGIN:', req.body);
-  console.log('HEADERS:', req.headers);
-
-
   if (!email || !password) {
     return res.status(400).json({ message: "Email y password son requeridos" });
   }
 
-  try{
-    apiKey = process.env.API_KEY;
-  
+  try {
+    const apiKey = process.env.API_KEY;
+
     const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email,
-        password,
-        returnSecureToken: true
-      })
+      body: JSON.stringify({ email, password, returnSecureToken: true })
     });
-    
-     const data = await response.json();
+
+    const data = await response.json();
 
     if (data.error) {
       return res.status(401).json({ message: "Credenciales inválidas", error: data.error.message });
     }
 
-     const [rows] = await pool.query("SELECT * FROM users WHERE firebase_uid = ?", [data.localId]);
+    const conn = await pool.getConnection();
+    try {
+      const [rows] = await conn.query("SELECT * FROM users WHERE firebase_uid = ?", [data.localId]);
+      if (rows.length === 0) {
+        return res.status(404).json({ message: "Usuario no encontrado en la base de datos" });
+      }
+      const user = rows[0];
 
-    if (rows.length === 0) {
-      return res.status(404).json({ message: "Usuario no encontrado en la base de datos" });
+      return res.status(200).json({
+        message: "Login exitoso",
+        uid: data.localId,
+        email: user.email,
+        name: user.name,
+        roles_idRole: user.roles_idrole,
+        idToken: data.idToken
+      });
+    } finally {
+      conn.release(); // <-- liberar siempre
     }
-
-    const user = rows[0];
-
-    // Retorno datos del usuario y token de Firebase
-    return res.status(200).json({
-      message: "Login exitoso",
-      uid: data.localId,
-      email: user.email,
-      name: user.name,
-      roles_idRole: user.roles_idrole,
-      idToken: data.idToken 
-    });
-  }catch(error){
+  } catch (error) {
     return res.status(500).json({ message: "Error en el proceso de login", error });
   }
-}
+};
+
 
 module.exports = { registerUser, loginUser };

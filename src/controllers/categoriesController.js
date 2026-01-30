@@ -1,67 +1,68 @@
 const pool = require('../config/db');
+
 saveCategory = async (req, res) => {
-    const { name, description } = req.body;
-  
-    try{
-      const [result] = await pool.query(
-        "INSERT INTO categories (name, description) VALUES (?, ?)",
-        [name, description]
-      );
-      if (result.affectedRows === 1) {
-          return res.status(201).json({ message: "Categoría creada", categoryId: result.insertId });
-      }
-    }
-    catch(error){
-      res.status(500).json({ message: "Error al crear categoría", error });
-    }
+  const { name, description } = req.body;
+
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const [result] = await conn.query(
+      "INSERT INTO categories (name, description) VALUES (?, ?)",
+      [name, description]
+    );
+    return res.status(201).json({ message: "Categoría creada", categoryId: result.insertId });
+  } catch (error) {
+    return res.status(500).json({ message: "Error al crear categoría", error });
+  } finally {
+    if (conn) conn.release();
   }
+};
 
-  deleteCategory = async (req, res) => {
+deleteCategory = async (req, res) => {
+  const categoryID = Number(req.params.id);
 
-    const { id } = req.params;
-    categoryID = Number(id);
-    console.log(categoryID);
-    console.log(typeof(categoryID));
-    try{
-      const [result] = await pool.query(
-        "DELETE FROM categories WHERE idcategory = ?",
-        [categoryID]
-      );
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const [result] = await conn.query(
+      "DELETE FROM categories WHERE idcategory = ?",
+      [categoryID]
+    );
 
-      
-      if (result.affectedRows === 0) {
-          return res.status(404).json({ message: "Categoría no encontrada" });
-      }
-      res.status(200).json({ message: "Categoría eliminada" });
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Categoría no encontrada" });
     }
-    catch(error){
-      res.status(500).json({ message: "Error al eliminar categoría", error });
-    }
+    return res.status(200).json({ message: "Categoría eliminada" });
+  } catch (error) {
+    return res.status(500).json({ message: "Error al eliminar categoría", error });
+  } finally {
+    if (conn) conn.release();
   }
+};
 
 getAllCategories = async (req, res) => {
-
-  try{
-    const [rows] = await pool.query( "SELECT * FROM categories");
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const [rows] = await conn.query("SELECT * FROM categories");
 
     if (rows.length === 0) {
-      return res.status(404).json({ message: "No hay categorias disponibles" });
+      return res.status(404).json({ message: "No hay categorías disponibles" });
     }
-    else{
-        return res.status(200).json({categories:rows});
-    }
-}
-    catch(error){
-      return res.status(500).json({ message: "Error al obtener categorias", error });
-    }
-
-}
+    return res.status(200).json({ categories: rows });
+  } catch (error) {
+    return res.status(500).json({ message: "Error al obtener categorías", error });
+  } finally {
+    if (conn) conn.release();
+  }
+};
 
 getCategoriesById = async (req, res) => {
-    const { id } = req.params;
-
-    try{
-    const [rows] = await pool.query(
+  const id = Number(req.params.id);
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const [rows] = await conn.query(
       "SELECT * FROM categories WHERE idcategory = ?",
       [id]
     );
@@ -69,41 +70,36 @@ getCategoriesById = async (req, res) => {
     if (rows.length === 0) {
       return res.status(404).json({ message: "Categoría no encontrada" });
     }
-    else{
-        return res.status(200).json({category:rows[0]});
-    }
-}
-    catch(error){
-      return res.status(500).json({ message: "Error al obtener categoria", error });
-    }
-}
+    return res.status(200).json({ category: rows[0] });
+  } catch (error) {
+    return res.status(500).json({ message: "Error al obtener categoría", error });
+  } finally {
+    if (conn) conn.release();
+  }
+};
 
 updateCategory = async (req, res) => {
-  const { id } = req.params;
+  const id = Number(req.params.id);
   const { name, description } = req.body;
 
+  let conn;
   try {
-    const [result] = await pool.query(
+    conn = await pool.getConnection();
+    const [result] = await conn.query(
       'UPDATE categories SET name = ?, description = ? WHERE idcategory = ?',
       [name, description, id]
     );
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ message: 'Categoria no encontrada' });
+      return res.status(404).json({ message: 'Categoría no encontrada' });
     }
 
-    res.json({
-      idcategory: Number(id),
-      name,
-      description
-    });
-
+    return res.json({ idcategory: id, name, description });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Error editando categoria' });
+    return res.status(500).json({ message: 'Error editando categoría', error });
+  } finally {
+    if (conn) conn.release();
   }
 };
 
-
-
-module.exports = {saveCategory, deleteCategory, getAllCategories, getCategoriesById, updateCategory };
+module.exports = { saveCategory, deleteCategory, getAllCategories, getCategoriesById, updateCategory };

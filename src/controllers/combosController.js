@@ -1,97 +1,141 @@
 const { pool } = require("../config/db");
 
-createCombo = (req, res) => {
+const { pool } = require("../config/db");
+
+createCombo = async (req, res) => {
   const { name, description, price, products } = req.body;
+  let conn;
 
-  pool.query(
-    "INSERT INTO combos (name, description, price) VALUES (?, ?, ?)",
-    [name, description, price],
-    (err, result) => {
-      if (err) {
-        return res.status(500).json({ message: "Error al crear combo", error: err });
-      }
+  try {
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
 
-      const comboId = result.insertId;
+    const [result] = await conn.query(
+      "INSERT INTO combos (name, description, price) VALUES (?, ?, ?)",
+      [name, description, price]
+    );
 
-      // Insertar productos del combo
-      products.forEach((p) => {
-        pool.query(
+    const comboId = result.insertId;
+
+    if (products && products.length > 0) {
+      for (const productId of products) {
+        await conn.query(
           "INSERT INTO products_combos (combos_idcombo, products_idproducts) VALUES (?, ?)",
-          [comboId, p],
-          (err2) => {
-            if (err2) console.error(err2);
-          }
+          [comboId, productId]
         );
-      });
-
-      return res.status(201).json({ message: "Combo creado", comboId });
+      }
     }
-  );
+
+    await conn.commit();
+    return res.status(201).json({ message: "Combo creado", comboId });
+
+  } catch (error) {
+    if (conn) await conn.rollback();
+    return res.status(500).json({ message: "Error al crear combo", error });
+  } finally {
+    if (conn) conn.release(); // 🔥 CLAVE
+  }
 };
 
 
-getCombos = (req, res) => {
-  const sql = `
-    SELECT c.idcombo, c.name, c.description, c.price,
-           GROUP_CONCAT(pc.products_idproducts) AS products
-    FROM combos c
-    LEFT JOIN products_combos pc ON c.idcombo = pc.combos_idcombo
-    GROUP BY c.idcombo
-  `;
-  pool.query(sql, (err, rows) => {
-    if (err) return res.status(500).json({ message: "Error al obtener combos", error: err });
-    if (!rows.length) return res.status(404).json({ message: "No se encontraron combos" });
+
+getCombos = async (req, res) => {
+  let conn;
+  try {
+    conn = await pool.getConnection();
+
+    const [rows] = await conn.query(`
+      SELECT c.idcombo, c.name, c.description, c.price,
+             GROUP_CONCAT(pc.products_idproducts) AS products
+      FROM combos c
+      LEFT JOIN products_combos pc ON c.idcombo = pc.combos_idcombo
+      GROUP BY c.idcombo
+    `);
+
+    if (!rows.length) {
+      return res.status(404).json({ message: "No se encontraron combos" });
+    }
+
     return res.status(200).json({ combos: rows });
-  });
+
+  } catch (error) {
+    return res.status(500).json({ message: "Error al obtener combos", error });
+  } finally {
+    if (conn) conn.release();
+  }
 };
 
 
 updateCombos = async (req, res) => {
-  const comboId = req.params.id;
-  const { name, description, price, products } = req.body; 
+  const comboId = Number(req.params.id);
+  const { name, description, price, products } = req.body;
+  let conn;
 
   try {
- 
-    await pool.promise().query(
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    const [update] = await conn.query(
       `UPDATE combos SET name = ?, description = ?, price = ? WHERE idcombo = ?`,
       [name, description, price, comboId]
     );
- 
-    await pool.promise().query(`DELETE FROM products_combos WHERE combos_idcombo = ?`, [comboId]);
 
-    if (products && products.length > 0) {
-      const values = products.map(p => [comboId, p]); 
-      await pool.promise().query(
-        `INSERT INTO products_combos (combos_idcombo, products_idproducts) VALUES ?`,
-        [values]
-      );
+    if (update.affectedRows === 0) {
+      await conn.rollback();
+      return res.status(404).json({ message: "Combo no encontrado" });
     }
 
-    res.json({ message: 'Combo actualizado correctamente' });
-  } catch (error) {
+    await conn.query(
+      `DELETE FROM products_combos WHERE combos_idcombo = ?`,
+      [comboId]
+    );
 
-    res.status(500).json({ error: 'Error al actualizar el combo' });
+    if (products && products.length > 0) {
+      for (const productId of products) {
+        await conn.query(
+          `INSERT INTO products_combos (combos_idcombo, products_idproducts) VALUES (?, ?)`,
+          [comboId, productId]
+        );
+      }
+    }
+
+    await conn.commit();
+    res.json({ message: "Combo actualizado correctamente" });
+
+  } catch (error) {
+    if (conn) await conn.rollback();
+    res.status(500).json({ message: "Error al actualizar el combo", error });
+  } finally {
+    if (conn) conn.release();
   }
 };
 
-deleteCombo = async (req, res) => {
-  const { id } = req.params;
-  comboID = Number(id);
 
-  try{
-    const [result] = await pool.promise().query(
+deleteCombo = async (req, res) => {
+  const comboID = Number(req.params.id);
+  let conn;
+
+  try {
+    conn = await pool.getConnection();
+
+    const [result] = await conn.query(
       "DELETE FROM combos WHERE idcombo = ?",
       [comboID]
     );
+
     if (result.affectedRows === 0) {
-        return res.status(404).json({ message: "Combo no encontrado" });
-    }   
+      return res.status(404).json({ message: "Combo no encontrado" });
+    }
+
     res.status(200).json({ message: "Combo eliminado" });
-  }
-  catch(error){
+
+  } catch (error) {
     res.status(500).json({ message: "Error al eliminar combo", error });
+  } finally {
+    if (conn) conn.release();
   }
-}
+};
+
 
 
 
