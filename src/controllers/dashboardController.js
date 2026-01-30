@@ -1,12 +1,8 @@
-const { pool } = require("../config/db");
+const pool = require("../config/db");
 
-getDashboardStats = async (req, res) => {
-  let conn;
-
+const getDashboardStats = async (req, res) => {
   try {
-    conn = await pool.getConnection();
-
-    const [rows] = await conn.query(`
+    const [results] = await pool.query(`
       SELECT
         (SELECT COUNT(*) FROM products) AS productsCount,
         (SELECT COUNT(*) FROM categories) AS categoriesCount,
@@ -14,15 +10,12 @@ getDashboardStats = async (req, res) => {
         (SELECT COUNT(*) FROM products WHERE stock = 0) AS productsOutOfStock
     `);
 
-    return res.status(200).json(rows[0]);
-
+    return res.status(200).json(results[0]);
   } catch (error) {
     return res.status(500).json({
       message: "Error al obtener estadísticas del dashboard",
       error
     });
-  } finally {
-    if (conn) conn.release(); 
   }
 };
 
