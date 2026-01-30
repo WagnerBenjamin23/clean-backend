@@ -1,6 +1,5 @@
 const { pool } = require("../config/db");
 
-const { pool } = require("../config/db");
 
 createCombo = async (req, res) => {
   const { name, description, price, products } = req.body;
