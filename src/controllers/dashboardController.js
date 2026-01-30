@@ -22,7 +22,7 @@ getDashboardStats = async (req, res) => {
       error
     });
   } finally {
-    if (conn) conn.release(); // 🔥 CLAVE
+    if (conn) conn.release(); 
   }
 };
 
