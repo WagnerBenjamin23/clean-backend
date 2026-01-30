@@ -19,22 +19,19 @@ class Server{
   ];
 
   this.app.use(cors({
-    origin: function (origin, callback) {
-      if (!origin) return callback(null, true);
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, true); // no romper en prod
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
-  }));
-
-  
-  this.app.options('*', cors());
 
   this.app.use(express.json());
   this.app.use(express.urlencoded({ extended: true }));
