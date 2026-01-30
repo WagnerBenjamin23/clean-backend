@@ -7,7 +7,7 @@ module.exports = (req, res, next) => {
     });
   }
 
-  if (apiKey !== process.env.API_KEY) {
+  if (apiKey !== process.env.API_KEY_BACKEND) {
     return res.status(403).json({
       message: 'Invalid API_KEY'
     });
