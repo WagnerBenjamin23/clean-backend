@@ -7,10 +7,13 @@ const combosController = require('../controllers/combosController');
 const dashboardController = require('../controllers/dashboardController');
 
 const {verifyToken} = require('../middlewares/verifyToken');
-const upload = require('../middlewares/upload')
+const upload = require('../middlewares/upload');
+const apiKey = require('../middlewares/apiKey');
 
 
 const router = Router();
+
+router.use(apiKey);
 
 router.get('/test', verifyToken, (req, res) => {
   res.json({ message: "Ruta test funcionando" });
